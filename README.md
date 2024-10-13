@@ -1,89 +1,82 @@
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+<html>
+<head>
+  <title>ESP Web Server</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <style>
+    html {font-family: Arial; display: inline-block; text-align: center;}
+    h2 {font-size: 3.0rem;}
+    p {font-size: 3.0rem;}
+    body {max-width: 600px; margin:0px auto; padding-bottom: 25px;}
+    .switch {position: relative; display: inline-block; width: 120px; height: 68px}
+    .switch input {display: none}
+    .slider {position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 6px}
+    .slider:before {position: absolute; content: ""; height: 52px; width: 52px; left: 8px; bottom: 8px; background-color: #fff; -webkit-transition: .4s; transition: .4s; border-radius: 3px}
+    input:checked+.slider {background-color: #b30000}
+    input:checked+.slider:before {-webkit-transform: translateX(52px); -ms-transform: translateX(52px); transform: translateX(52px)}
+  </style>
+</head>
+<body>
+  <h2>ESP Web Server</h2>
 
-const char* ssid = "your_SSID";
-const char* password = "your_PASSWORD";
+  <h4>Output - GPIO 2</h4>
+  <label class="switch">
+    <input type="checkbox" id="gpio2" onchange="toggleGPIO(2)">
+    <span class="slider"></span>
+  </label>
 
-ESP8266WebServer server(80);
+  <h4>Output - GPIO 4</h4>
+  <label class="switch">
+    <input type="checkbox" id="gpio4" onchange="toggleGPIO(4)">
+    <span class="slider"></span>
+  </label>
 
-int gpio2State = LOW;
-int gpio4State = LOW;
-int gpio33State = LOW;
+  <h4>Output - GPIO 33</h4>
+  <label class="switch">
+    <input type="checkbox" id="gpio33" onchange="toggleGPIO(33)">
+    <span class="slider"></span>
+  </label>
 
-// Timer for auto-reset after 1 minute
-unsigned long lastChange2 = 0;
-unsigned long lastChange4 = 0;
-unsigned long lastChange33 = 0;
+  <script>
+    // Function to toggle GPIO state
+    function toggleGPIO(pin) {
+      var element = document.getElementById("gpio" + pin);
+      var state = element.checked ? 1 : 0;
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", `http://<ESP_IP>/update?output=${pin}&state=${state}`, true);
+      xhr.send();
 
-void setup() {
-  Serial.begin(115200);
+      // Start a timer to reset the switch after 1 minute
+      setTimeout(function() {
+        resetGPIO(pin);
+      }, 60000);
+    }
 
-  // Connect to WiFi
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-  }
-  Serial.println("Connected to WiFi");
+    // Function to reset GPIO state
+    function resetGPIO(pin) {
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", `http://<ESP_IP>/update?output=${pin}&state=0`, true);
+      xhr.send();
+      document.getElementById("gpio" + pin).checked = false;  // Update UI
+    }
 
-  // Setup GPIOs
-  pinMode(2, OUTPUT);
-  pinMode(4, OUTPUT);
-  pinMode(33, OUTPUT);
+    // Function to update switch states from the server
+    function updateSwitches() {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          var states = JSON.parse(this.responseText);
+          document.getElementById("gpio2").checked = states.gpio2 == 1;
+          document.getElementById("gpio4").checked = states.gpio4 == 1;
+          document.getElementById("gpio33").checked = states.gpio33 == 1;
+        }
+      };
+      xhr.open("GET", `http://<ESP_IP>/status`, true);
+      xhr.send();
+    }
 
-  // Start the web server
-  server.on("/update", handleUpdate);
-  server.on("/status", handleStatus);
-  server.begin();
-}
-
-void loop() {
-  server.handleClient();
-  checkAutoReset();
-}
-
-// Handle update requests
-void handleUpdate() {
-  String output = server.arg("output");
-  String state = server.arg("state");
-
-  if (output == "2") {
-    gpio2State = state.toInt();
-    digitalWrite(2, gpio2State);
-    lastChange2 = millis();  // Reset timer
-  } else if (output == "4") {
-    gpio4State = state.toInt();
-    digitalWrite(4, gpio4State);
-    lastChange4 = millis();  // Reset timer
-  } else if (output == "33") {
-    gpio33State = state.toInt();
-    digitalWrite(33, gpio33State);
-    lastChange33 = millis();  // Reset timer
-  }
-
-  server.send(200, "text/plain", "OK");
-}
-
-// Serve the current status of the switches
-void handleStatus() {
-  String response = "{\"gpio2\": " + String(gpio2State) +
-                    ", \"gpio4\": " + String(gpio4State) +
-                    ", \"gpio33\": " + String(gpio33State) + "}";
-  server.send(200, "application/json", response);
-}
-
-// Automatically reset the GPIO after 1 minute
-void checkAutoReset() {
-  if (millis() - lastChange2 >= 60000 && gpio2State == HIGH) {
-    gpio2State = LOW;
-    digitalWrite(2, LOW);
-  }
-  if (millis() - lastChange4 >= 60000 && gpio4State == HIGH) {
-    gpio4State = LOW;
-    digitalWrite(4, LOW);
-  }
-  if (millis() - lastChange33 >= 60000 && gpio33State == HIGH) {
-    gpio33State = LOW;
-    digitalWrite(33, LOW);
-  }
-}
+    // Update switches on page load
+    window.onload = updateSwitches;
+  </script>
+</body>
+</html>
