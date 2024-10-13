@@ -38,30 +38,49 @@
   </label>
 
   <script>
+    // Function to toggle GPIO pins and send the request to the server
     function toggleGPIO(pin) {
       var element = document.getElementById("gpio" + pin);
       var state = element.checked ? 1 : 0;
+      
+      // Save the state in localStorage
+      localStorage.setItem("gpio" + pin, state);
+
       var xhr = new XMLHttpRequest();
       xhr.open("GET", `http://<ESP_IP>/update?output=${pin}&state=${state}`, true);
       xhr.send();
+
+      // Reset to OFF after 1 minute (60000 ms)
+      setTimeout(function() {
+        resetSwitch(pin);
+      }, 60000);
     }
 
-    function updateSwitches() {
+    // Function to reset the switch to OFF
+    function resetSwitch(pin) {
+      document.getElementById("gpio" + pin).checked = false;
+      localStorage.setItem("gpio" + pin, 0);  // Update localStorage
+
       var xhr = new XMLHttpRequest();
-      xhr.onreadystatechange = function() {
-        if (this.readyState == 4 && this.status == 200) {
-          var states = JSON.parse(this.responseText);
-          document.getElementById("gpio2").checked = states.gpio2 == 1;
-          document.getElementById("gpio4").checked = states.gpio4 == 1;
-          document.getElementById("gpio33").checked = states.gpio33 == 1;
-        }
-      };
-      xhr.open("GET", `http://<ESP_IP>/status`, true);
+      xhr.open("GET", `http://<ESP_IP>/update?output=${pin}&state=0`, true);
       xhr.send();
     }
 
-    // Atualiza os switches automaticamente a cada 2 segundos
-    setInterval(updateSwitches, 2000);
+    // Load the saved switch states from localStorage on page load
+    function loadSwitchStates() {
+      ["2", "4", "33"].forEach(function(pin) {
+        var savedState = localStorage.getItem("gpio" + pin);
+        if (savedState === "1") {
+          document.getElementById("gpio" + pin).checked = true;
+        } else {
+          document.getElementById("gpio" + pin).checked = false;
+        }
+      });
+    }
+
+    window.onload = function() {
+      loadSwitchStates();  // Restore switch states on page load
+    };
   </script>
 </body>
 </html>
